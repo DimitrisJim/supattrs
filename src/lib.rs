@@ -1,4 +1,6 @@
 //! Mod Docs
+// #[!warn(missing_debug_implementations, rust_2018_idioms, missing_docs)]
+
 /*
 Const(ItemConst),
 Enum(ItemEnum),
@@ -20,40 +22,57 @@ Verbatim(TokenStream),
 */
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use syn::{parse, AttributeArgs, Item, parse_macro_input};
-mod visit;
-mod transform;
-use visit::Visit;
-use transform::Transform;
+use syn::{
+    parse, AttributeArgs, Item,
+    parse_macro_input, ItemFn,
+};
+mod visitable;
+mod visitor;
+////use visit::Visit;
+use visitor::Visitor;
+use visitable::Visitable;
 
-struct Temp {}
-impl Transform for Temp {
-    fn transform(self) -> Self {
-        self
+struct Rename {}
+impl Visitor for Rename {
+    fn visit_fn<'a>(&self, func: &'a mut ItemFn) -> &'a mut ItemFn {
+        let ident = quote::format_ident!("{}", "Foo");
+        func.sig.ident = ident;
+
+        func
     }
 }
 
 // For my own ease.
 type TS = TokenStream;
 
-pub fn apply_attribute(attrs: TS, it: TS) -> TS {
-    // Grab it as an item.
-    let item: Item = parse(it.clone()).expect("Expected an item");
-    let attributes: AttributeArgs = parse_macro_input!(attrs as AttributeArgs);
+pub(crate) fn apply_attribute<T>(attrs: TS, it: TS, transformer: T) -> TS
+    where T: Visitor
+{
+    // We want a mut item here, we plan to change it in some way.
+    // todo: do they syn docs advise against this?
+    let mut item: Item = parse(it.clone()).expect("Expected an item");
+    let _attributes: AttributeArgs = parse_macro_input!(attrs as AttributeArgs);
+    // todo: add rest.
     match item {
         // Handle fn application.
-        Item::Fn(item) => {
-            let t = Temp{};
-            item.visit(attributes, t)
+        Item::Fn(ref mut item) => {
+            item.accept(&transformer)
         }
-        // Handle module application.
-        Item::Mod(item) => {
-            let t = Temp{};
-            item.visit(attributes, t)
+        Item::Struct(ref mut item) => {
+            item.accept(&transformer)
+        }
+        Item::Mod(ref mut item) => {
+            item.accept(&transformer)
         }
         // Can't handle this.
         _ => {
             panic!("Item must be mod or fn.");
         }
     }
+}
+
+#[proc_macro_attribute]
+pub fn rename(attrs: TS, it: TS) -> TS {
+    let r = Rename{};
+    apply_attribute(attrs, it, r)
 }

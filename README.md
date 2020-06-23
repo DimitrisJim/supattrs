@@ -21,6 +21,37 @@ then call `match` but that would result in a big `match` block that calls visit
 for every item; that's non-extensible and it seems like a cleaner solution
 could be found. 
 
+##### How do I want this to behave:
+
+The basic idea I'm going after is this: We define a struct that describes our transformation. 
+This struct must implement the `Transform` trait by implementing the `transform` function.
+
+In short, let's say we simply want to rename a function:
+
+```rust
+use transform::Transform;
+
+#[attribute]  // todo: maybe this would be nice idea?
+struct Renamer {
+    new_name: String
+}
+
+impl Transform<ItemFn> for Renamer {
+    fn transform(self, item: ItemFn) -> ItemFn {
+        // this could be improved
+        let ident = format_ident!("{}", self.new_name);
+
+        // create the new signature
+        let sig = Signature{
+            ident, ..function.sig
+        };
+        // and return the new itemfn
+        ItemFn{sig, attrs: function_attributes,  ..function}        
+    }
+}
+
+```
+
 #### Licence
 
 Licensed under either of:
