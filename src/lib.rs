@@ -6,6 +6,7 @@ use syn::{
     parse, AttributeArgs, Item,
     parse_macro_input, ItemFn,
 };
+use quote::quote;
 mod visitable;
 mod visitor;
 use visitor::Visitor;
@@ -13,11 +14,13 @@ use visitable::Visitable;
 
 struct Rename {}
 impl Visitor for Rename {
-    fn visit_fn<'a>(&self, func: &'a mut ItemFn) -> &'a mut ItemFn {
+    fn visit_fn(&self, func: &mut ItemFn) -> TokenStream {
         let ident = quote::format_ident!("{}", "Foo");
         func.sig.ident = ident;
-
-        func
+        (quote! {
+            #[test]
+            #func
+        }).into()
     }
 }
 
