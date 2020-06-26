@@ -10,10 +10,11 @@ use quote::quote;
 mod visitable;
 mod visitor;
 use visitor::Visitor;
-use visitable::Visitable;
+use visitable::dispatch;
 
 struct Rename {}
 impl Visitor for Rename {
+    // todo: mut ref?
     fn visit_fn(&self, func: &mut ItemFn) -> TokenStream {
         let ident = quote::format_ident!("{}", "Foo");
         func.sig.ident = ident;
@@ -37,63 +38,7 @@ pub(crate) fn apply_attribute<T>(attrs: TS, it: TS, transformer: T) -> TS
     // todo: handle attrs etc
     // todo: mas elegant way? This seems overkill, for every enum variant we
     // todo: do similar things here and in visitor.
-    match item {
-        // Handle fn application.
-        Item::Fn(ref mut func) => {
-            func.accept(&transformer)
-        }
-        Item::Struct(ref mut structure) => {
-            structure.accept(&transformer)
-        }
-        Item::Mod(ref mut module) => {
-            module.accept(&transformer)
-        }
-        Item::Const(ref mut const_item) => {
-            const_item.accept(&transformer)
-        }
-        Item::Enum(ref mut enum_item) => {
-            enum_item.accept(&transformer)
-        }
-        Item::ExternCrate(ref mut externcrate_item) => {
-            externcrate_item.accept(&transformer)
-        }
-        Item::ForeignMod(ref mut foreignmod_item) => {
-            foreignmod_item.accept(&transformer)
-        }
-        Item::Impl(ref mut impl_item) => {
-            impl_item.accept(&transformer)
-        }
-        // macro_rules macro def
-        Item::Macro(ref mut macro_item) => {
-            macro_item.accept(&transformer)
-        }
-        Item::Macro2(ref mut macro2_item) => {
-            macro2_item.accept(&transformer)
-        }
-        Item::Static(ref mut static_item) => {
-            static_item.accept(&transformer)
-        }
-        Item::Trait(ref mut trait_item) => {
-            trait_item.accept(&transformer)
-        }
-        Item::TraitAlias(ref mut traitalias_item) => {
-            traitalias_item.accept(&transformer)
-        }
-        Item::Type(ref mut type_item) => {
-            type_item.accept(&transformer)
-        }
-        Item::Union(ref mut union_item) => {
-            union_item.accept(&transformer)
-        }
-        Item::Use(ref mut use_item) => {
-            use_item.accept(&transformer)
-        }
-        // Can't handle this.
-        _ => {
-            // todo, be more descriptive.
-            panic!("Item must be mod or fn.");
-        }
-    }
+    dispatch(&mut item, &transformer)
 }
 
 
@@ -102,5 +47,6 @@ pub(crate) fn apply_attribute<T>(attrs: TS, it: TS, transformer: T) -> TS
 #[proc_macro_attribute]
 pub fn rename(attrs: TS, it: TS) -> TS {
     let r = Rename{};
+    // note: transformer *could* be passed by ref
     apply_attribute(attrs, it, r)
 }

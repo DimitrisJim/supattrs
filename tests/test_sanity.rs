@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports, unused_macros)]
+#![allow(dead_code, unused_imports, unused_macros )]
 extern crate supattrs;
 use supattrs::rename;
 
