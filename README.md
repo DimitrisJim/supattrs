@@ -15,11 +15,10 @@ The visitor should accept an applicator (or, in general, some object that
 accepts the item representation and transforms it) and apply it recursively
 as it visits the subitems of an item.
 
-After this, we need an entry point, though. Would a single function that just calls
-`visit` (or, whatever the name is) do? We could parse the input as an `Item` and
-then call `match` but that would result in a big `match` block that calls visit
-for every item; that's non-extensible and it seems like a cleaner solution
-could be found. 
+After this, we need an entry point. We could parse the input as an `Item` and
+then call `match` (and that's what's done for now). That results in a big `match` 
+block that calls visit for every item; that's non-extensible and it seems like a 
+cleaner solution could be found. 
 
 ##### How do I want this to behave:
 
@@ -29,27 +28,16 @@ This struct must implement the `Transform` trait by implementing the `transform`
 In short, let's say we simply want to rename a function:
 
 ```rust
-use transform::Transform;
-
-#[attribute]  // todo: maybe this would be nice idea?
 struct Renamer {
     new_name: String
 }
 
-impl Transform<ItemFn> for Renamer {
-    fn transform(self, item: ItemFn) -> ItemFn {
-        // this could be improved
-        let ident = format_ident!("{}", self.new_name);
-
-        // create the new signature
-        let sig = Signature{
-            ident, ..function.sig
-        };
-        // and return the new itemfn
-        ItemFn{sig, attrs: function_attributes,  ..function}        
+impl Visitor for Renamer {
+    fn visit_fn(&self, func: &mut ItemFn, attrs: &AttributeArgs) -> TokenStream {
+        // Mutate ItemFn and use AttributeArgs
+        // return new item using quote!
     }
 }
-
 ```
 
 #### Licence

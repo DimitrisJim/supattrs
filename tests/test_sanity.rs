@@ -84,3 +84,10 @@ trait SendTest = TestTrait + Send;
 #[rename]
 macro my_macro = {...}
 */
+
+#[rename]
+mod f{
+    use super::*;
+    fn deokd() {}
+
+}

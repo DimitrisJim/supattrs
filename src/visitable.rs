@@ -1,10 +1,6 @@
 use proc_macro::{TokenStream};
 use crate::visitor::Visitor;
-use syn::{
-    ItemMod, ItemFn, ItemStruct, ItemConst, ItemEnum, ItemExternCrate, ItemForeignMod,
-    ItemImpl, ItemMacro, ItemMacro2, ItemStatic, ItemTrait, ItemTraitAlias, ItemType,
-    ItemUnion, ItemUse, Item
-};
+use syn::{ItemMod, ItemFn, ItemStruct, ItemConst, ItemEnum, ItemExternCrate, ItemForeignMod, ItemImpl, ItemMacro, ItemMacro2, ItemStatic, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, ItemUse, Item, AttributeArgs};
 
 type TS = TokenStream;
 
@@ -16,17 +12,17 @@ type TS = TokenStream;
 ///
 /// Note: It might be a good idea to create two visitors; one that recurses through
 /// note: the items and one that does not.
-pub trait Visitable {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS;
+trait Visitable {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS;
 }
 
 // Visit the module; calls visit_mod and then goes through its
 // items calling visit_* for each found.
 impl Visitable for ItemMod {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
         // Alright, pass on to visit mod and then visit items.
         // todo: do we need to clone?
-        let mut module = visitor.visit_mod(&mut self.clone());
+        let mut module = visitor.visit_mod(&mut self.clone(), attrs);
         // Grab content, its a Vec<item>
         let (_, content) = match &mut self.content {
             Some(content) => content,
@@ -34,9 +30,11 @@ impl Visitable for ItemMod {
                 panic!("Cannot apply macro to mod declaration.");
             }
         };
-        // Handle fn application.
+        // Apply it. todo: we need to store returns!
         for subitem in content.iter_mut(){
-            dispatch(subitem, visitor);
+            // note: if we want all items applied to see the same attrs
+            // note: we necessarily need to clone here.
+            dispatch(subitem, &mut attrs.clone(), visitor);
         }
         module
     }
@@ -44,86 +42,86 @@ impl Visitable for ItemMod {
 
 // Note: Should visit constituent items.
 impl Visitable for ItemStruct {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_struct(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_struct(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemFn {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_fn(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_fn(self, attrs);
         res
     }
 }
 
 impl Visitable for ItemConst {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_const(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_const(self, attrs);
         res
     }
 }
 
 impl Visitable for ItemEnum {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_enum(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_enum(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemExternCrate {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_externcrate(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_externcrate(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemForeignMod {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_foreignmod(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_foreignmod(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemImpl {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_impl(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_impl(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemMacro {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_macro(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_macro(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemMacro2 {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_macro2(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_macro2(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemStatic {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_static(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_static(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemTrait {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_trait(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_trait(self, attrs);
         res
     }
 }
@@ -131,87 +129,95 @@ impl Visitable for ItemTrait {
 
 // todo: unstable feature, how do we feature bound things?
 impl Visitable for ItemTraitAlias {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_traitalias(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_traitalias(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemType {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_type(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_type(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemUnion {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_union(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_union(self, attrs);
         res
     }
 }
 
 
 impl Visitable for ItemUse {
-    fn accept<V: Visitor>(&mut self, visitor: &V) -> TS {
-        let res = visitor.visit_use(self);
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        let res = visitor.visit_use(self, attrs);
         res
     }
 }
 
-
-pub fn dispatch<V: Visitor>(item: &mut Item, transformer: &V) -> TS {
+/// Dispatch: Call appropriate accept based on the item passed.
+///
+/// ##### Notes:
+///
+/// No need to move values here. We accept as mut references to allow use to mutate them
+/// in his visit_* function.
+///
+pub(crate) fn dispatch<V>(item: &mut Item, attrs: &AttributeArgs, transformer: &V) -> TS
+    where V: Visitor
+{
     match item {
         Item::Fn(ref mut func) => {
-            func.accept(transformer)
+            func.accept(attrs, transformer)
         }
         Item::Struct(ref mut structure) => {
-            structure.accept(transformer)
+            structure.accept(attrs, transformer)
         }
         Item::Mod(ref mut module) => {
-            module.accept(transformer)
+            module.accept(attrs, transformer)
         }
         Item::Const(ref mut const_item) => {
-            const_item.accept(transformer)
+            const_item.accept(attrs, transformer)
         }
         Item::Enum(ref mut enum_item) => {
-            enum_item.accept(transformer)
+            enum_item.accept(attrs, transformer)
         }
         Item::ExternCrate(ref mut externcrate_item) => {
-            externcrate_item.accept(transformer)
+            externcrate_item.accept(attrs, transformer)
         }
         Item::ForeignMod(ref mut foreignmod_item) => {
-            foreignmod_item.accept(transformer)
+            foreignmod_item.accept(attrs, transformer)
         }
         Item::Impl(ref mut impl_item) => {
-            impl_item.accept(transformer)
+            impl_item.accept(attrs, transformer)
         }
         // macro_rules macro def
         Item::Macro(ref mut macro_item) => {
-            macro_item.accept(transformer)
+            macro_item.accept(attrs, transformer)
         }
         Item::Macro2(ref mut macro2_item) => {
-            macro2_item.accept(transformer)
+            macro2_item.accept(attrs, transformer)
         }
         Item::Static(ref mut static_item) => {
-            static_item.accept(transformer)
+            static_item.accept(attrs, transformer)
         }
         Item::Trait(ref mut trait_item) => {
-            trait_item.accept(transformer)
+            trait_item.accept(attrs, transformer)
         }
         Item::TraitAlias(ref mut traitalias_item) => {
-            traitalias_item.accept(transformer)
+            traitalias_item.accept(attrs, transformer)
         }
         Item::Type(ref mut type_item) => {
-            type_item.accept(transformer)
+            type_item.accept(attrs, transformer)
         }
         Item::Union(ref mut union_item) => {
-            union_item.accept(transformer)
+            union_item.accept(attrs, transformer)
         }
         Item::Use(ref mut use_item) => {
-            use_item.accept(transformer)
+            use_item.accept(attrs, transformer)
         }
         // note: Does not handle Verbatim and a private __Nonexhaustive.
         _ => {
