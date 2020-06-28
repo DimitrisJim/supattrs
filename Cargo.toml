@@ -10,8 +10,10 @@ description = ""
 documentation = "https://docs.rs/supattrs"
 publish = false
 
-[lib]
-proc-macro = true
+# Cargo.toml with [package] and [workspace] is considered root package.
+# Just add members here, see samplemacros/Cargo.toml for more.
+[workspace]
+members = ["samplemacros"]
 
 [dependencies]
 quote = "1.0"

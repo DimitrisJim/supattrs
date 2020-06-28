@@ -1,0 +1,22 @@
+[package]
+name = "samplemacros"
+version = "0.1.0"
+authors = ["Jim Fasarakis-Hilliard <d.f.hilliard@gmail.com>"]
+edition = "2018"
+# Specify in which workspace we belong (i.e path to Cargo.toml with [workspace] defined.)
+workspace = ".."
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true
+
+# Need to specify supattrs (i.e "..") as a dependency. Too bad ".." isn't specified anywhere
+# in the docs as the way to do this.
+# Note: Appears necesary to specify dependencies, even if they match root package's ones.
+[dependencies]
+supattrs = {path = ".."}
+quote = "1.0"
+
+[dependencies.syn]
+version = "1.0"
+features = ['full']
