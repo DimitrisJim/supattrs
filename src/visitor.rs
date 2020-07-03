@@ -1,3 +1,6 @@
+// don't want to use [syn::NestedMeta]; it seems like that is an internal detail.
+// AttributeArgs on the other hand is the exported type to use.
+#![allow(clippy::ptr_arg)]
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
@@ -9,6 +12,7 @@ use syn::{
 
 
 // todo: macro_rules?
+// todo: strict visitor -- i.e visitor that errors when applied wrong place
 // note: attrs as mut reference, needed?
 // Default implementations for all, simply return their items.
 pub trait Visitor {

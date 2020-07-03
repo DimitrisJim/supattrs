@@ -12,7 +12,7 @@ impl Visitor for Rename {
         let _attrs = attrs;
 
         let ident = quote::format_ident!("{}", "Foo");
-        println!("{}", "In another item too but, I get visited.");
+        println!("In another item too but, I get visited.");
         func.sig.ident = ident;
         (quote! {
             #[test]

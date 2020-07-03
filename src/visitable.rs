@@ -1,9 +1,4 @@
-use proc_macro::{TokenStream};
-use crate::visitor::Visitor;
-use syn::{ItemMod, ItemFn, ItemStruct, ItemConst, ItemEnum, ItemExternCrate, ItemForeignMod, ItemImpl, ItemMacro, ItemMacro2, ItemStatic, ItemTrait, ItemTraitAlias, ItemType, ItemUnion, ItemUse, Item, AttributeArgs};
-
-type TS = TokenStream;
-
+#![allow(clippy::ptr_arg)]
 /// Each implementation of Visitable for the Items should apply the macro
 /// (defined by visitor) not only to the item it represents but also to items
 /// it might contain. This way, if a user specified, for example, visit_fn,
@@ -11,153 +6,199 @@ type TS = TokenStream;
 /// the items contained in the `mod` and apply the macro to each `fn` it finds.
 ///
 /// Note: It might be a good idea to create two visitors; one that recurses through
-/// note: the items and one that does not.
+/// Note: the items and one that does not.
+/// Note: don't want to use [syn::NestedMeta]; it seems like that is an internal detail.
+///       AttributeArgs on the other hand is the exported type to use.
+use proc_macro::{TokenStream};
+use crate::visitor::Visitor;
+use quote::quote;
+use syn::{
+    ItemMod, ItemFn, ItemStruct, ItemConst, ItemEnum, ItemExternCrate,
+    ItemForeignMod, ItemImpl, ItemMacro, ItemMacro2, ItemStatic, ItemTrait,
+    ItemTraitAlias, ItemType, ItemUnion, ItemUse, Item, AttributeArgs,
+    parse
+};
+
+type TS = TokenStream;
+
+/// Trait to accept visitors for syn::Item's
 trait Visitable {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS;
 }
 
-// Visit the module; calls visit_mod and then goes through its
-// items calling visit_* for each found.
+// Note: Items are contained in `Some(contents.1)` as a Vec<Item> where all items are allowed.
 impl Visitable for ItemMod {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        // Alright, pass on to visit mod and then visit items.
-        // todo: do we need to clone?
-        let mut module = visitor.visit_mod(&mut self.clone(), attrs);
+        // note: (sad) I need to parse again in order to walk the updated mod
+        let mut module: ItemMod = parse(visitor.visit_mod(self, attrs))
+            .expect("Invalid module returned from visit_mod.");
         // Grab content, its a Vec<item>
-        let (_, content) = match &mut self.content {
+        let (_, content) = match &mut module.content {
             Some(content) => content,
             None => {
                 panic!("Cannot apply macro to mod declaration.");
             }
         };
-        // Apply it. todo: we need to store returns!
+
+        // note (impl): map might be of help here.
+        // note (impl): post and pre visit?
+        let mut new_contents: Vec<Item> = Vec::new();
         for subitem in content.iter_mut(){
             // note: if we want all items applied to see the same attrs
             // note: we necessarily need to clone here.
-            dispatch(subitem, &mut attrs.clone(), visitor);
+            // note: (sad) I need to parse again.
+            let res = parse(dispatch(subitem, &attrs.clone(), visitor))
+                .expect("Invalid item returned from visit implementation.");
+            new_contents.push(res);
         }
-        module
+        // drop new_contents into content
+        content.clear();
+        content.append(&mut new_contents);
+        // note: test test test:: does it contain new content?
+        (quote! {
+            #module
+        }).into()
     }
 }
 
-// Note: Should visit constituent items.
-impl Visitable for ItemStruct {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_struct(self, attrs);
-        res
-    }
-}
-
-
-impl Visitable for ItemFn {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_fn(self, attrs);
-        res
-    }
-}
-
-impl Visitable for ItemConst {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_const(self, attrs);
-        res
-    }
-}
-
-impl Visitable for ItemEnum {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_enum(self, attrs);
-        res
-    }
-}
-
-
-impl Visitable for ItemExternCrate {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_externcrate(self, attrs);
-        res
-    }
-}
-
-
+// Note: Items are contained in `items` as a Vec<ForeignItem{ItemName}> where ItemName can be one of:
+//     ForeignItemFn
+//     ForeignItemStatic
+//     ForeignItemType
+//     ForeignItemMacro
+//     TokenStream  (unused)
+//  How can we change them into Items?
 impl Visitable for ItemForeignMod {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_foreignmod(self, attrs);
-        res
+        let fmod: ItemForeignMod = parse(visitor.visit_foreignmod(self, attrs))
+            .expect("Invalid TokenStream returned from visit_foreignmod.");
+        (quote! {
+            #fmod
+        }).into()
     }
 }
 
-
+// Note: Items are contained in `items` as a Vec<ImplItem{ItemName}> where ItemName can be one of:
+//     ImplItemConst
+//     ImplItemMethod
+//     ImplItemType
+//     ImplItemMacro
+//     TokenStream  (unused)
+//  How can we change them into Items?
 impl Visitable for ItemImpl {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_impl(self, attrs);
-        res
+        let item_impl: ItemImpl = parse(visitor.visit_impl(self, attrs))
+            .expect("Invalid TokenStream returned from visit_impl.");
+        (quote! {
+            #item_impl
+        }).into()
     }
 }
 
-
-impl Visitable for ItemMacro {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_macro(self, attrs);
-        res
-    }
-}
-
-
-impl Visitable for ItemMacro2 {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_macro2(self, attrs);
-        res
-    }
-}
-
-
-impl Visitable for ItemStatic {
-    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_static(self, attrs);
-        res
-    }
-}
-
-
+// Note: Items are contained in `items` as a Vec<TraitItem{ItemName}> where ItemName can be one of:
+//     TraitItemConst
+//     TraitItemMethod
+//     TraitItemType
+//     TraitItemMacro
+//     TokenStream  (unused)
+//  How can we change them into Items?
 impl Visitable for ItemTrait {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_trait(self, attrs);
-        res
+        let trait_impl: ItemTrait = parse(visitor.visit_trait(self, attrs))
+            .expect("Invalid TokenStream returned from visit_trait.");
+        (quote! {
+            #trait_impl
+        }).into()
     }
 }
 
+//--- The following do not have items contained inside of them. ---//
 
-// todo: unstable feature, how do we feature bound things?
-impl Visitable for ItemTraitAlias {
+/// Visit struct item and return altered TokenStream
+impl Visitable for ItemStruct {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_traitalias(self, attrs);
-        res
+        visitor.visit_struct(self, attrs)
     }
 }
 
+/// Visit fn item and return altered TokenStream
+impl Visitable for ItemFn {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_fn(self, attrs)
+    }
+}
 
+/// Visit const item and return altered TokenStream
+impl Visitable for ItemConst {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_const(self, attrs)
+    }
+}
+
+/// Visit enum item and return altered TokenStream
+impl Visitable for ItemEnum {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_enum(self, attrs)
+    }
+}
+
+/// Visit extern item and return altered TokenStream
+impl Visitable for ItemExternCrate {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_externcrate(self, attrs)
+    }
+}
+
+/// Visit macro (old) item and return altered TokenStream
+impl Visitable for ItemMacro {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_macro(self, attrs)
+    }
+}
+
+/// Visit macro (new) item and return altered TokenStream
+impl Visitable for ItemMacro2 {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_macro2(self, attrs)
+    }
+}
+
+/// Visit static item and return altered TokenStream
+impl Visitable for ItemStatic {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_static(self, attrs)
+    }
+}
+
+/// Visit type item and return altered TokenStream
 impl Visitable for ItemType {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_type(self, attrs);
-        res
+        visitor.visit_type(self, attrs)
     }
 }
 
-
+/// Visit union item and return altered TokenStream
 impl Visitable for ItemUnion {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_union(self, attrs);
-        res
+        visitor.visit_union(self, attrs)
     }
 }
 
-
+/// Visit use item and return altered TokenStream
 impl Visitable for ItemUse {
     fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
-        let res = visitor.visit_use(self, attrs);
-        res
+        visitor.visit_use(self, attrs)
     }
 }
+
+// todo: unstable feature, how do we feature bound things?
+/// Visit trait alias item and return altered TokenStream
+impl Visitable for ItemTraitAlias {
+    fn accept<V: Visitor>(&mut self, attrs: &AttributeArgs, visitor: &V) -> TS {
+        visitor.visit_traitalias(self, attrs)
+    }
+}
+
 
 /// Dispatch: Call appropriate accept based on the item passed.
 ///
